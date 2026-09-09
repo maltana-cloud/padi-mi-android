@@ -18,11 +18,13 @@ public final class SpeechEngine {
 
     private final SpeechRecognizer recognizer;
     private final Listener listener;
+    private final Context context;
     private boolean listening;
 
     public SpeechEngine(Context context, Listener listener) {
+        this.context = context.getApplicationContext();
         this.listener = listener;
-        recognizer = SpeechRecognizer.createSpeechRecognizer(context.getApplicationContext());
+        recognizer = SpeechRecognizer.createSpeechRecognizer(this.context);
         recognizer.setRecognitionListener(new RecognitionListener() {
             public void onReadyForSpeech(Bundle p) { listening = true; listener.onReady(); }
             public void onBeginningOfSpeech() {}
@@ -41,9 +43,15 @@ public final class SpeechEngine {
         });
     }
 
-    public boolean isAvailable() { return SpeechRecognizer.isRecognitionAvailable(null); }
+    public boolean isAvailable() {
+        return SpeechRecognizer.isRecognitionAvailable(context);
+    }
 
     public void start() {
+        if (!isAvailable()) {
+            listener.onError(SpeechRecognizer.ERROR_CLIENT);
+            return;
+        }
         if (listening) recognizer.cancel();
         Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
