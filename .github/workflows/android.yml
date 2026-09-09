@@ -15,6 +15,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Install Android SDK 34
+        uses: android-actions/setup-android@v3
       - name: Install Gradle
         run: |
           curl -fsSL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip
