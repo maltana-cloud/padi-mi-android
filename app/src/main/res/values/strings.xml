@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">PADI MI</string>
+    <string name="accessibility_description">PADI MI uses accessibility controls to perform user-requested actions such as tapping, scrolling and typing.</string>
+</resources>
