@@ -2,6 +2,7 @@ package com.padimi.android;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.role.RoleManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -24,6 +25,8 @@ import com.padimi.android.speech.SpeechEngine;
 import com.padimi.android.voice.TtsEngine;
 
 public final class MainActivity extends Activity {
+    private static final int MIC_REQUEST = 10;
+    private static final int ASSISTANT_ROLE_REQUEST = 20;
     private SpeechEngine speech;
     private TtsEngine tts;
     private CommandInterpreter brain;
@@ -81,20 +84,56 @@ public final class MainActivity extends Activity {
         Button accessibility = new Button(this);
         accessibility.setText("Enable phone control");
         accessibility.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
-        box.addView(title); box.addView(status); box.addView(listen); box.addView(accessibility);
+        Button assistant = new Button(this);
+        assistant.setText("Set PADI MI as phone assistant");
+        assistant.setOnClickListener(v -> requestAssistantRole());
+        box.addView(title);
+        box.addView(status);
+        box.addView(listen);
+        box.addView(accessibility);
+        box.addView(assistant);
         setContentView(box);
+    }
+
+    private void requestAssistantRole() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
+            status.setText("Android assistant role needs Android 10 or newer.");
+            return;
+        }
+        RoleManager roles = (RoleManager) getSystemService(RoleManager.class);
+        if (roles == null || !roles.isRoleAvailable(RoleManager.ROLE_ASSISTANT)) {
+            status.setText("This phone does not expose the Android assistant role.");
+            return;
+        }
+        if (roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)) {
+            status.setText("PADI MI is already your phone assistant.");
+            return;
+        }
+        try {
+            startActivityForResult(roles.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT), ASSISTANT_ROLE_REQUEST);
+        } catch (RuntimeException e) {
+            status.setText("Android could not open the assistant selection screen.");
+        }
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == ASSISTANT_ROLE_REQUEST) {
+            if (resultCode == RESULT_OK) status.setText("PADI MI is now your phone assistant.");
+            else status.setText("Assistant selection was not changed.");
+        }
     }
 
     private void requestMicAndListen() {
         conversationMode = true;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 10);
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MIC_REQUEST);
         } else speech.start();
     }
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == 10) {
+        if (requestCode == MIC_REQUEST) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 conversationMode = true;
                 speech.start();
