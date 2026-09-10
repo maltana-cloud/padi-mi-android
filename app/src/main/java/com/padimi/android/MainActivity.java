@@ -89,7 +89,22 @@ public final class MainActivity extends Activity {
         conversationMode = true;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 10);
-        } else speech.start();
+        } else {
+            speech.start();
+        }
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 10) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                conversationMode = true;
+                speech.start();
+            } else {
+                conversationMode = false;
+                status.setText("Microphone permission is required for voice control.");
+            }
+        }
     }
 
     private void handle(String raw) {
@@ -218,9 +233,6 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onPause() {
-        // The current conversational microphone loop is intentionally foreground-only.
-        // Global/background wake is a separate Android assistant capability and will be
-        // enabled only when the device's VoiceInteractionService path is actually verified.
         conversationMode = false;
         super.onPause();
     }
