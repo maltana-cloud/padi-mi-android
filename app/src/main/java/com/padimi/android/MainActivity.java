@@ -30,6 +30,7 @@ public final class MainActivity extends Activity {
     private ConversationEngine conversation;
     private MemoryStore memory;
     private TextView status;
+    private boolean conversationMode;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -38,10 +39,24 @@ public final class MainActivity extends Activity {
         memory = new MemoryStore(this);
         conversation = new ConversationEngine(memory);
         tts = new TtsEngine(this);
+        tts.setListener(() -> {
+            if (conversationMode && !isFinishing()) {
+                status.postDelayed(() -> {
+                    if (conversationMode && !isFinishing()) speech.start();
+                }, 250);
+            }
+        });
         speech = new SpeechEngine(this, new SpeechEngine.Listener() {
             public void onReady() { status.setText("Listening…"); }
             public void onResult(String text) { status.setText("Heard: " + text); handle(text); }
-            public void onError(int code) { status.setText(speechError(code)); }
+            public void onError(int code) {
+                status.setText(speechError(code));
+                if (conversationMode && code != android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                    status.postDelayed(() -> {
+                        if (conversationMode && !isFinishing()) speech.start();
+                    }, 700);
+                }
+            }
         });
     }
 
@@ -71,6 +86,7 @@ public final class MainActivity extends Activity {
     }
 
     private void requestMicAndListen() {
+        conversationMode = true;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 10);
         } else speech.start();
@@ -80,10 +96,16 @@ public final class MainActivity extends Activity {
         List<Command> commands = brain.parseAll(raw);
         if (commands.size() == 1 && commands.get(0).type == Command.Type.UNKNOWN) {
             String reply = conversation.reply(raw);
+            rememberConversation(raw, reply);
             speak(reply);
             return;
         }
-        if (commands.isEmpty()) { speak(conversation.reply(raw)); return; }
+        if (commands.isEmpty()) {
+            String reply = conversation.reply(raw);
+            rememberConversation(raw, reply);
+            speak(reply);
+            return;
+        }
         boolean any = false;
         StringBuilder replies = new StringBuilder();
         for (Command c : commands) {
@@ -95,12 +117,18 @@ public final class MainActivity extends Activity {
             }
         }
         if (!any) {
-            speak(conversation.reply(raw));
+            String reply = conversation.reply(raw);
+            rememberConversation(raw, reply);
+            speak(reply);
             return;
         }
         String finalReply = replies.toString();
-        status.setText(finalReply);
-        tts.speak(finalReply);
+        rememberConversation(raw, finalReply);
+        speak(finalReply);
+    }
+
+    private void rememberConversation(String user, String assistant) {
+        memory.addConversationTurn(user, assistant);
     }
 
     private String execute(Command c) {
@@ -149,6 +177,7 @@ public final class MainActivity extends Activity {
                 startActivity(search);
                 return "Searching for " + c.argument + ".";
             case STOP:
+                conversationMode = false;
                 speech.stop(); tts.stop(); return "Okay.";
             default: return "";
         }
@@ -183,6 +212,23 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void speak(String text) { status.setText(text); tts.speak(text); }
-    @Override protected void onDestroy() { if (speech != null) speech.destroy(); if (tts != null) tts.shutdown(); super.onDestroy(); }
+    private void speak(String text) {
+        status.setText(text);
+        tts.speak(text);
+    }
+
+    @Override protected void onPause() {
+        // The current conversational microphone loop is intentionally foreground-only.
+        // Global/background wake is a separate Android assistant capability and will be
+        // enabled only when the device's VoiceInteractionService path is actually verified.
+        conversationMode = false;
+        super.onPause();
+    }
+
+    @Override protected void onDestroy() {
+        conversationMode = false;
+        if (speech != null) speech.destroy();
+        if (tts != null) tts.shutdown();
+        super.onDestroy();
+    }
 }
