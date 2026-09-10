@@ -89,9 +89,7 @@ public final class MainActivity extends Activity {
         conversationMode = true;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 10);
-        } else {
-            speech.start();
-        }
+        } else speech.start();
     }
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
@@ -142,9 +140,7 @@ public final class MainActivity extends Activity {
         speak(finalReply);
     }
 
-    private void rememberConversation(String user, String assistant) {
-        memory.addConversationTurn(user, assistant);
-    }
+    private void rememberConversation(String user, String assistant) { memory.addConversationTurn(user, assistant); }
 
     private String execute(Command c) {
         PadiAccessibilityService service = PadiAccessibilityService.getInstance();
@@ -201,17 +197,12 @@ public final class MainActivity extends Activity {
     private String executeSwipe(PadiAccessibilityService service, String direction) {
         if (service == null) return "Please enable PADI MI phone control first.";
         android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
-        float cx = dm.widthPixels / 2f;
-        float cy = dm.heightPixels / 2f;
-        if (direction.toLowerCase().contains("left")) {
-            if (service.swipe(dm.widthPixels * .82f, cy, dm.widthPixels * .18f, cy, 400)) return "Swiped left.";
-        } else if (direction.toLowerCase().contains("right")) {
-            if (service.swipe(dm.widthPixels * .18f, cy, dm.widthPixels * .82f, cy, 400)) return "Swiped right.";
-        } else if (direction.toLowerCase().contains("up")) {
-            if (service.swipe(cx, dm.heightPixels * .75f, cx, dm.heightPixels * .25f, 400)) return "Swiped up.";
-        } else if (direction.toLowerCase().contains("down")) {
-            if (service.swipe(cx, dm.heightPixels * .25f, cx, dm.heightPixels * .75f, 400)) return "Swiped down.";
-        }
+        float cx = dm.widthPixels / 2f, cy = dm.heightPixels / 2f;
+        String d = direction == null ? "" : direction.toLowerCase();
+        if (d.contains("left") && service.swipe(dm.widthPixels * .82f, cy, dm.widthPixels * .18f, cy, 400)) return "Swiped left.";
+        if (d.contains("right") && service.swipe(dm.widthPixels * .18f, cy, dm.widthPixels * .82f, cy, 400)) return "Swiped right.";
+        if (d.contains("up") && service.swipe(cx, dm.heightPixels * .75f, cx, dm.heightPixels * .25f, 400)) return "Swiped up.";
+        if (d.contains("down") && service.swipe(cx, dm.heightPixels * .25f, cx, dm.heightPixels * .75f, 400)) return "Swiped down.";
         return "I couldn't perform that swipe.";
     }
 
@@ -227,15 +218,7 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void speak(String text) {
-        status.setText(text);
-        tts.speak(text);
-    }
-
-    @Override protected void onPause() {
-        conversationMode = false;
-        super.onPause();
-    }
+    private void speak(String text) { status.setText(text); tts.speak(text); }
 
     @Override protected void onDestroy() {
         conversationMode = false;
