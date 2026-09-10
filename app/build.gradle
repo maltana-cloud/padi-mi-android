@@ -10,4 +10,24 @@ android {
         versionCode 4
         versionName '0.4.0'
     }
+
+    def signingFile = rootProject.file('signing/signing.properties')
+    if (signingFile.exists()) {
+        def props = new Properties()
+        signingFile.withInputStream { props.load(it) }
+        signingConfigs {
+            release {
+                storeFile rootProject.file('signing/padi-mi-release.jks')
+                storePassword props['storePassword']
+                keyAlias props['keyAlias']
+                keyPassword props['keyPassword']
+            }
+        }
+        buildTypes {
+            release {
+                signingConfig signingConfigs.release
+                minifyEnabled false
+            }
+        }
+    }
 }
