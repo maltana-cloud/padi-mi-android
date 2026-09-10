@@ -16,25 +16,35 @@ public final class AppLauncher {
         String target = normalize(appName);
         if (target.isEmpty()) return false;
 
-        Map<String, String> aliases = new HashMap<>();
-        aliases.put("chrome", "chrome");
-        aliases.put("google chrome", "chrome");
-        aliases.put("browser", "chrome");
-        aliases.put("chat gpt", "chatgpt");
-        aliases.put("chatgpt", "chatgpt");
-        aliases.put("whatsapp", "whatsapp");
-        aliases.put("telegram", "telegram");
-        aliases.put("youtube", "youtube");
-        aliases.put("settings", "settings");
-        String wanted = aliases.containsKey(target) ? aliases.get(target) : target;
+        // Prefer exact known package IDs. This avoids relying on the launcher
+        // label and makes common apps work even when Android exposes a different
+        // display name.
+        Map<String, String[]> packages = new HashMap<>();
+        packages.put("chrome", new String[]{"com.android.chrome"});
+        packages.put("google chrome", new String[]{"com.android.chrome"});
+        packages.put("browser", new String[]{"com.android.chrome"});
+        packages.put("chatgpt", new String[]{"com.openai.chatgpt"});
+        packages.put("chat gpt", new String[]{"com.openai.chatgpt"});
+        packages.put("whatsapp", new String[]{"com.whatsapp"});
+        packages.put("telegram", new String[]{"org.telegram.messenger"});
+        packages.put("youtube", new String[]{"com.google.android.youtube"});
+        packages.put("settings", new String[]{"com.android.settings"});
 
+        String[] candidates = packages.get(target);
+        if (candidates != null) {
+            for (String packageName : candidates) {
+                if (launchPackage(context, pm, packageName)) return true;
+            }
+        }
+
+        // Fallback: match visible launcher applications by their labels.
         ApplicationInfo best = null;
         int bestScore = 0;
         for (ApplicationInfo info : pm.getInstalledApplications(PackageManager.MATCH_ALL)) {
             CharSequence label = pm.getApplicationLabel(info);
             if (label == null || pm.getLaunchIntentForPackage(info.packageName) == null) continue;
             String name = normalize(label.toString());
-            int score = score(wanted, name);
+            int score = score(target, name);
             if (score > bestScore) {
                 bestScore = score;
                 best = info;
@@ -42,11 +52,19 @@ public final class AppLauncher {
         }
 
         if (best == null || bestScore < 60) return false;
-        Intent launch = pm.getLaunchIntentForPackage(best.packageName);
-        if (launch == null) return false;
-        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
-        context.startActivity(launch);
-        return true;
+        return launchPackage(context, pm, best.packageName);
+    }
+
+    private static boolean launchPackage(Context context, PackageManager pm, String packageName) {
+        try {
+            Intent launch = pm.getLaunchIntentForPackage(packageName);
+            if (launch == null) return false;
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            context.startActivity(launch);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     private static String normalize(String value) {
