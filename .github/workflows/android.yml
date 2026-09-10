@@ -22,9 +22,35 @@ jobs:
           curl -fsSL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp
           echo "/tmp/gradle-8.9/bin" >> "$GITHUB_PATH"
-      - name: Build debug APK
+      - name: Configure release signing when repository secrets are available
+        if: ${{ secrets.PADI_MI_KEYSTORE_B64 != '' }}
+        env:
+          PADI_MI_KEYSTORE_B64: ${{ secrets.PADI_MI_KEYSTORE_B64 }}
+          PADI_MI_STORE_PASSWORD: ${{ secrets.PADI_MI_STORE_PASSWORD }}
+          PADI_MI_KEY_ALIAS: ${{ secrets.PADI_MI_KEY_ALIAS }}
+          PADI_MI_KEY_PASSWORD: ${{ secrets.PADI_MI_KEY_PASSWORD }}
+        run: |
+          mkdir -p signing
+          printf '%s' "$PADI_MI_KEYSTORE_B64" | base64 --decode > signing/padi-mi-release.jks
+          cat > signing/signing.properties <<EOF
+          storePassword=$PADI_MI_STORE_PASSWORD
+          keyAlias=$PADI_MI_KEY_ALIAS
+          keyPassword=$PADI_MI_KEY_PASSWORD
+          EOF
+      - name: Build release APK when signing is configured
+        if: ${{ secrets.PADI_MI_KEYSTORE_B64 != '' }}
+        run: gradle --no-daemon assembleRelease
+      - name: Build debug APK fallback
+        if: ${{ secrets.PADI_MI_KEYSTORE_B64 == '' }}
         run: gradle --no-daemon assembleDebug
-      - name: Upload debug APK
+      - name: Upload release APK
+        if: ${{ secrets.PADI_MI_KEYSTORE_B64 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: padi-mi-release
+          path: app/build/outputs/apk/release/app-release.apk
+      - name: Upload debug APK fallback
+        if: ${{ secrets.PADI_MI_KEYSTORE_B64 == '' }}
         uses: actions/upload-artifact@v4
         with:
           name: padi-mi-debug
