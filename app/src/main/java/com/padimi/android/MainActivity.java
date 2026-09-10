@@ -18,6 +18,7 @@ import com.padimi.android.actions.SystemActions;
 import com.padimi.android.accessibility.PadiAccessibilityService;
 import com.padimi.android.brain.Command;
 import com.padimi.android.brain.CommandInterpreter;
+import com.padimi.android.brain.ConversationEngine;
 import com.padimi.android.memory.MemoryStore;
 import com.padimi.android.speech.SpeechEngine;
 import com.padimi.android.voice.TtsEngine;
@@ -26,6 +27,7 @@ public final class MainActivity extends Activity {
     private SpeechEngine speech;
     private TtsEngine tts;
     private CommandInterpreter brain;
+    private ConversationEngine conversation;
     private MemoryStore memory;
     private TextView status;
 
@@ -34,11 +36,12 @@ public final class MainActivity extends Activity {
         buildUi();
         brain = new CommandInterpreter();
         memory = new MemoryStore(this);
+        conversation = new ConversationEngine(memory);
         tts = new TtsEngine(this);
         speech = new SpeechEngine(this, new SpeechEngine.Listener() {
             public void onReady() { status.setText("Listening…"); }
             public void onResult(String text) { status.setText("Heard: " + text); handle(text); }
-            public void onError(int code) { status.setText("I couldn't hear that. Try again."); }
+            public void onError(int code) { status.setText(speechError(code)); }
         });
     }
 
@@ -75,7 +78,12 @@ public final class MainActivity extends Activity {
 
     private void handle(String raw) {
         List<Command> commands = brain.parseAll(raw);
-        if (commands.isEmpty()) { speak("I didn't catch a command."); return; }
+        if (commands.size() == 1 && commands.get(0).type == Command.Type.UNKNOWN) {
+            String reply = conversation.reply(raw);
+            speak(reply);
+            return;
+        }
+        if (commands.isEmpty()) { speak(conversation.reply(raw)); return; }
         boolean any = false;
         StringBuilder replies = new StringBuilder();
         for (Command c : commands) {
@@ -86,8 +94,11 @@ public final class MainActivity extends Activity {
                 replies.append(reply);
             }
         }
-        if (!any) replies.setLength(0);
-        String finalReply = any ? replies.toString() : "I heard you, but I don't know how to do that yet.";
+        if (!any) {
+            speak(conversation.reply(raw));
+            return;
+        }
+        String finalReply = replies.toString();
         status.setText(finalReply);
         tts.speak(finalReply);
     }
@@ -158,6 +169,18 @@ public final class MainActivity extends Activity {
             if (service.swipe(cx, dm.heightPixels * .25f, cx, dm.heightPixels * .75f, 400)) return "Swiped down.";
         }
         return "I couldn't perform that swipe.";
+    }
+
+    private String speechError(int code) {
+        switch (code) {
+            case android.speech.SpeechRecognizer.ERROR_AUDIO: return "I can't access the microphone. Check microphone permission.";
+            case android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS: return "Microphone permission is required.";
+            case android.speech.SpeechRecognizer.ERROR_NETWORK:
+            case android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT: return "Speech recognition needs a working network connection on this phone.";
+            case android.speech.SpeechRecognizer.ERROR_NO_MATCH: return "I didn't catch the words. Please try again.";
+            case android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY: return "The speech recognizer is busy. Try again in a moment.";
+            default: return "I couldn't hear that. Try again.";
+        }
     }
 
     private void speak(String text) { status.setText(text); tts.speak(text); }
