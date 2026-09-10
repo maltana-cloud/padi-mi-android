@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -16,9 +17,6 @@ public final class AppLauncher {
         String target = normalize(appName);
         if (target.isEmpty()) return false;
 
-        // Prefer exact known package IDs. This avoids relying on the launcher
-        // label and makes common apps work even when Android exposes a different
-        // display name.
         Map<String, String[]> packages = new HashMap<>();
         packages.put("chrome", new String[]{"com.android.chrome"});
         packages.put("google chrome", new String[]{"com.android.chrome"});
@@ -35,9 +33,15 @@ public final class AppLauncher {
             for (String packageName : candidates) {
                 if (launchPackage(context, pm, packageName)) return true;
             }
+            // If the user explicitly asked for Chrome, do not silently open a
+            // different browser when Chrome is absent.
+            if (target.equals("chrome") || target.equals("google chrome")) return false;
         }
 
-        // Fallback: match visible launcher applications by their labels.
+        // "browser" means the user's default web browser. This works even if
+        // Chrome is not installed.
+        if (target.equals("browser")) return openDefaultBrowser(context);
+
         ApplicationInfo best = null;
         int bestScore = 0;
         for (ApplicationInfo info : pm.getInstalledApplications(PackageManager.MATCH_ALL)) {
@@ -50,9 +54,19 @@ public final class AppLauncher {
                 best = info;
             }
         }
-
         if (best == null || bestScore < 60) return false;
         return launchPackage(context, pm, best.packageName);
+    }
+
+    private static boolean openDefaultBrowser(Context context) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/"));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     private static boolean launchPackage(Context context, PackageManager pm, String packageName) {
@@ -69,7 +83,9 @@ public final class AppLauncher {
 
     private static String normalize(String value) {
         if (value == null) return "";
-        return value.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+        return value.trim().toLowerCase(Locale.ROOT)
+                .replaceAll("[.!?,]+$", "")
+                .replaceAll("\\s+", " ");
     }
 
     private static int score(String wanted, String actual) {
@@ -80,7 +96,6 @@ public final class AppLauncher {
         String[] b = actual.split(" ");
         int hits = 0;
         for (String x : a) for (String y : b) if (x.equals(y)) hits++;
-        if (hits > 0) return 60 + Math.min(15, hits * 5);
-        return 0;
+        return hits > 0 ? 60 + Math.min(15, hits * 5) : 0;
     }
 }
