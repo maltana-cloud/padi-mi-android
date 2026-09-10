@@ -3,11 +3,34 @@ plugins { id 'com.android.application' }
 android {
     namespace 'com.padimi.android'
     compileSdk 34
+
     defaultConfig {
         applicationId 'com.padimi.android'
         minSdk 26
         targetSdk 34
-        versionCode 3
-        versionName '0.3.0'
+        versionCode 4
+        versionName '0.4.0'
+    }
+
+    signingConfigs {
+        release {
+            def signingFile = rootProject.file('signing/signing.properties')
+            if (!signingFile.exists()) {
+                throw new GradleException('PADI MI release signing key is missing. Configure signing/signing.properties only in a trusted build environment.')
+            }
+            def props = new Properties()
+            signingFile.withInputStream { props.load(it) }
+            storeFile rootProject.file('signing/padi-mi-release.jks')
+            storePassword props['storePassword']
+            keyAlias props['keyAlias']
+            keyPassword props['keyPassword']
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+        }
     }
 }
